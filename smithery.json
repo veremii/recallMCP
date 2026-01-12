@@ -1,0 +1,41 @@
+{
+  "$schema": "https://smithery.ai/schema/smithery.json",
+  "name": "recall-mcp",
+  "description": "MCP server for persistent engineering knowledge storage with semantic search. Save code snippets, bug fixes, and architectural patterns — search by meaning, not just keywords.",
+  "vendor": "Community",
+  "sourceUrl": "https://github.com/USERNAME/recall-mcp",
+  "license": "MIT",
+  "runtime": "node",
+  "commands": {
+    "default": {
+      "command": "npx",
+      "args": ["-y", "recall-mcp"]
+    },
+    "docker": {
+      "command": "docker",
+      "args": ["run", "-i", "--rm", "ghcr.io/USERNAME/recall-mcp:latest"]
+    }
+  },
+  "tools": [
+    {
+      "name": "save_knowledge",
+      "description": "Saves code snippet, bug fix solution, or architectural pattern to knowledge base with automatic vectorization"
+    },
+    {
+      "name": "search_knowledge", 
+      "description": "Semantic search across knowledge base. Finds similar records by meaning, not just keywords"
+    },
+    {
+      "name": "get_knowledge",
+      "description": "Gets full content of a knowledge record by ID"
+    }
+  ],
+  "tags": [
+    "knowledge-base",
+    "semantic-search",
+    "code-snippets",
+    "vector-search",
+    "mongodb",
+    "qdrant"
+  ]
+}

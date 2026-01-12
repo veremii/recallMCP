@@ -1,18 +1,48 @@
 {
   "name": "recall-mcp",
   "version": "1.3.0",
-  "description": "MCP server for persistent engineering knowledge storage",
+  "description": "MCP server for persistent engineering knowledge storage with semantic search",
   "type": "module",
   "main": "dist/index.js",
+  "bin": {
+    "recall-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsx src/index.ts",
     "start": "node dist/index.js",
+    "prepublishOnly": "npm run build",
     "lint": "eslint src --ext .ts"
   },
-  "keywords": ["mcp", "knowledge-base", "snippets", "ai-context"],
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "knowledge-base",
+    "snippets",
+    "ai-context",
+    "semantic-search",
+    "vector-search",
+    "claude",
+    "cursor"
+  ],
   "author": "",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/USERNAME/recall-mcp.git"
+  },
+  "homepage": "https://github.com/USERNAME/recall-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/USERNAME/recall-mcp/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
     "@qdrant/js-client-rest": "^1.7.0",

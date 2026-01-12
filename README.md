@@ -1,8 +1,8 @@
 # Recall MCP
 
-MCP-сервер для персистентного хранения инженерных знаний с **семантическим поиском**.
+MCP server for persistent engineering knowledge storage with **semantic search**.
 
-## Архитектура
+## Architecture
 
 ```
 ┌─────────────┐     ┌───────────────────────────────┐
@@ -20,25 +20,25 @@ MCP-сервер для персистентного хранения инжен
                               └───────────┘
 ```
 
-**Всё в Docker — запуск в 1 клик. Без Ollama (~500MB вместо ~3GB).**
+**All in Docker — one-click start. No Ollama (~500MB instead of ~3GB).**
 
-## Быстрый старт
+## Quick Start
 
-### 1. Запуск
+### 1. Run
 
 ```bash
 docker-compose up -d
 ```
 
-Автоматически поднимутся:
+This will automatically start:
 
-- **MongoDB** — хранение данных
-- **Qdrant** — векторное хранилище (quantized)
-- **MCP Server** — сервер с встроенными эмбеддингами
+- **MongoDB** — data storage
+- **Qdrant** — vector store (quantized)
+- **MCP Server** — server with built-in embeddings
 
-Модель `multilingual-e5-small` (~90MB) скачается при первом запуске.
+The `multilingual-e5-small` model (~90MB) will be downloaded on first run.
 
-### 2. Настройка Claude Desktop
+### 2. Configure Claude Desktop
 
 `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
@@ -53,68 +53,94 @@ docker-compose up -d
 }
 ```
 
-### 3. Остановка
+For Cursor IDE, add to `~/.cursor/mcp.json`.
+
+### 3. Stop
 
 ```bash
 docker-compose down
 ```
 
-## Инструменты
+## Tools
 
 ### `save_knowledge`
 
-Сохраняет знание с автоматической векторизацией.
+Saves knowledge with automatic vectorization.
+
+**Arguments:**
+
+- `title` (string) — short title
+- `content` (string) — full content (code, config, description)
+- `kind` (enum) — `snippet` | `issue` | `pattern`
+- `tags` (string[]) — tags for search
+- `project` (string, optional) — project name
 
 ### `search_knowledge`
 
-**Семантический поиск** — находит по смыслу, не только по ключевым словам.
+**Semantic search** — finds by meaning, not just keywords.
+
+**Arguments:**
+
+- `query` (string) — search query (natural language)
+- `kind` (enum, optional) — filter by type
+- `project` (string, optional) — filter by project
+- `limit` (number, optional) — results count (1-20, default 5)
 
 ```
-Запрос: "настройка бандлера для микросервисов"
-Найдёт: "Webpack конфиг для микро-фронтендов"
+Query: "how to configure bundler for microservices"
+Finds: "Webpack config for micro-frontends"
 ```
 
 ### `get_knowledge`
 
-Получает полное содержимое по ID.
+Gets full content by ID from search results.
 
-## Оптимизации
+**Arguments:**
 
-| Техника                 | Описание                       | Эффект           |
-| ----------------------- | ------------------------------ | ---------------- |
-| **Scalar Quantization** | int8 вместо float32            | 4x меньше памяти |
-| **ONNX Runtime**        | transformers.js с квантованием | ~90MB модель     |
-| **Hybrid Search**       | Vector → Text fallback         | 100% coverage    |
+- `id` (string) — record ID
 
-## Модель эмбеддингов
+## Features
 
-**multilingual-e5-small** — мультиязычная модель с хорошей поддержкой русского.
+| Feature                 | Description                       | Effect         |
+| ----------------------- | --------------------------------- | -------------- |
+| **Scalar Quantization** | int8 instead of float32           | 4x less memory |
+| **ONNX Runtime**        | transformers.js with quantization | ~90MB model    |
+| **Hybrid Search**       | Vector → Text fallback            | 100% coverage  |
+| **Auto Sync**           | MongoDB ↔ Qdrant sync on start    | No data loss   |
 
-- Размер: ~90MB (quantized)
+## Embedding Model
+
+**multilingual-e5-small** — multilingual model with good Russian support.
+
+- Size: ~90MB (quantized)
 - Dimensions: 384
-- Качество на русском: ~58% MTEB
+- Quality: ~58% MTEB
 
-## Разработка (без Docker)
+## Development (without Docker)
 
 ```bash
 npm install
 
-# Поднять только БД
+# Start only databases
 docker-compose up -d mongodb qdrant
 
-# Dev режим
+# Dev mode
 npm run dev
 ```
 
-## Переменные окружения
+## Environment Variables
 
-| Переменная    | По умолчанию                           | Описание         |
+| Variable      | Default                                | Description      |
 | ------------- | -------------------------------------- | ---------------- |
 | `MONGODB_URI` | `mongodb://localhost:27017/recall_mcp` | MongoDB          |
 | `QDRANT_URL`  | `http://localhost:6333`                | Qdrant vector DB |
 
-## Требования
+## Requirements
 
 - Docker & Docker Compose
 - ~1GB RAM
-- ~500MB диска
+- ~500MB disk space
+
+## License
+
+MIT
