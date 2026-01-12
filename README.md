@@ -6,10 +6,10 @@ MCP server for persistent engineering knowledge storage with **semantic search**
 
 ```
 ┌─────────────┐     ┌───────────────────────────────┐
-│   Claude    │────▶│         MCP Server            │
-└─────────────┘     │  ┌─────────────────────────┐  │
-                    │  │  transformers.js        │  │──▶ Qdrant
-                    │  │  (multilingual-e5-small)│  │    (vectors)
+│ Claude/     │────▶│         MCP Server            │
+│ Cursor      │ SSE │  ┌─────────────────────────┐  │──▶ Qdrant
+└─────────────┘     │  │  transformers.js        │  │    (vectors)
+                    │  │  (multilingual-e5-small)│  │
                     │  └─────────────────────────┘  │
                     └───────────────┬───────────────┘
                                     │
@@ -24,23 +24,41 @@ MCP server for persistent engineering knowledge storage with **semantic search**
 
 ## Quick Start
 
-### 1. Run
+### Option 1: HTTP Mode (Recommended for SaaS)
 
 ```bash
+# Create API keys config
+cp config/api-keys.example.json config/api-keys.json
+# Edit api-keys.json with your keys
+
+# Start
 docker-compose up -d
 ```
 
-This will automatically start:
+Server will be available at `http://localhost:3000`
 
-- **MongoDB** — data storage
-- **Qdrant** — vector store (quantized)
-- **MCP Server** — server with built-in embeddings
+**Configure client:**
 
-The `multilingual-e5-small` model (~90MB) will be downloaded on first run.
+```json
+{
+  "mcpServers": {
+    "recall": {
+      "url": "http://localhost:3000/sse",
+      "headers": {
+        "Authorization": "Bearer sk-recall-xxxxxxxxxxxxxxxxxxxx"
+      }
+    }
+  }
+}
+```
 
-### 2. Configure Claude Desktop
+### Option 2: stdio Mode (Local Development)
 
-`~/Library/Application Support/Claude/claude_desktop_config.json`:
+```bash
+docker-compose -f docker-compose.stdio.yml up -d
+```
+
+**Configure Claude Desktop:**
 
 ```json
 {
@@ -53,13 +71,49 @@ The `multilingual-e5-small` model (~90MB) will be downloaded on first run.
 }
 ```
 
-For Cursor IDE, add to `~/.cursor/mcp.json`.
-
-### 3. Stop
+### Stop
 
 ```bash
 docker-compose down
 ```
+
+## Transport Modes
+
+| Mode    | Use Case              | Auth    | Config            |
+| ------- | --------------------- | ------- | ----------------- |
+| `http`  | SaaS, remote access   | API Key | `TRANSPORT=http`  |
+| `stdio` | Local, Claude Desktop | None    | `TRANSPORT=stdio` |
+
+## API Authentication
+
+Create `config/api-keys.json`:
+
+```json
+{
+  "keys": [
+    {
+      "id": "user-1",
+      "key": "sk-recall-your-secret-key",
+      "name": "My API Key",
+      "enabled": true
+    }
+  ]
+}
+```
+
+Use in requests:
+
+```
+Authorization: Bearer sk-recall-your-secret-key
+```
+
+## Endpoints (HTTP Mode)
+
+| Endpoint    | Method | Auth    | Description    |
+| ----------- | ------ | ------- | -------------- |
+| `/health`   | GET    | No      | Health check   |
+| `/sse`      | GET    | API Key | SSE connection |
+| `/messages` | POST   | API Key | MCP messages   |
 
 ## Tools
 
@@ -107,16 +161,19 @@ Gets full content by ID from search results.
 | **ONNX Runtime**        | transformers.js with quantization | ~90MB model    |
 | **Hybrid Search**       | Vector → Text fallback            | 100% coverage  |
 | **Auto Sync**           | MongoDB ↔ Qdrant sync on start    | No data loss   |
+| **SSE Transport**       | HTTP-based, no Docker commands    | Easy deploy    |
 
-## Embedding Model
+## Environment Variables
 
-**multilingual-e5-small** — multilingual model with good Russian support.
+| Variable        | Default                                | Description           |
+| --------------- | -------------------------------------- | --------------------- |
+| `MONGODB_URI`   | `mongodb://localhost:27017/recall_mcp` | MongoDB               |
+| `QDRANT_URL`    | `http://localhost:6333`                | Qdrant vector DB      |
+| `TRANSPORT`     | `stdio`                                | `http` or `stdio`     |
+| `PORT`          | `3000`                                 | HTTP port             |
+| `API_KEYS_PATH` | `./config/api-keys.json`               | Path to API keys file |
 
-- Size: ~90MB (quantized)
-- Dimensions: 384
-- Quality: ~58% MTEB
-
-## Development (without Docker)
+## Development
 
 ```bash
 npm install
@@ -124,16 +181,12 @@ npm install
 # Start only databases
 docker-compose up -d mongodb qdrant
 
-# Dev mode
+# Dev mode (stdio)
 npm run dev
+
+# Dev mode (http)
+TRANSPORT=http PORT=3000 npm run dev
 ```
-
-## Environment Variables
-
-| Variable      | Default                                | Description      |
-| ------------- | -------------------------------------- | ---------------- |
-| `MONGODB_URI` | `mongodb://localhost:27017/recall_mcp` | MongoDB          |
-| `QDRANT_URL`  | `http://localhost:6333`                | Qdrant vector DB |
 
 ## Requirements
 

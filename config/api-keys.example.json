@@ -1,0 +1,16 @@
+{
+  "keys": [
+    {
+      "id": "user-1",
+      "key": "sk-recall-xxxxxxxxxxxxxxxxxxxx",
+      "name": "Development Key",
+      "enabled": true
+    },
+    {
+      "id": "user-2", 
+      "key": "sk-recall-yyyyyyyyyyyyyyyyyyyy",
+      "name": "Production Key",
+      "enabled": true
+    }
+  ]
+}

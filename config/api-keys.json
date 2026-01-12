@@ -1,0 +1,10 @@
+{
+  "keys": [
+    {
+      "id": "dev-1",
+      "key": "sk-recall-dev-local-key-12345",
+      "name": "Local Development",
+      "enabled": true
+    }
+  ]
+}

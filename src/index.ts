@@ -9,15 +9,34 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 
 import { connectDatabase, disconnectDatabase } from './config/database.js';
+import { loadApiKeys } from './config/auth.js';
 import { initVectorStore } from './services/vectorStore.js';
 import { preloadModel } from './services/embeddings.js';
 import { syncMongoToQdrant } from './services/sync.js';
 import { saveKnowledge, SaveKnowledgeInputSchema } from './tools/saveKnowledge.js';
 import { searchKnowledge, SearchKnowledgeInputSchema } from './tools/searchKnowledge.js';
 import { getKnowledge, GetKnowledgeInputSchema } from './tools/getKnowledge.js';
+import { startHttpServer } from './transport/sse.js';
 
 const SERVER_NAME = 'recall-mcp';
-const SERVER_VERSION = '1.3.0';
+const SERVER_VERSION = '1.4.0';
+
+type TransportMode = 'stdio' | 'http';
+
+/**
+ * Определяет режим транспорта
+ */
+function getTransportMode(): TransportMode {
+  // Явный флаг через env
+  if (process.env.TRANSPORT === 'http') return 'http';
+  if (process.env.TRANSPORT === 'stdio') return 'stdio';
+  
+  // Если есть PORT — значит HTTP режим
+  if (process.env.PORT) return 'http';
+  
+  // По умолчанию stdio для CLI
+  return 'stdio';
+}
 
 /**
  * Создание и настройка MCP сервера
@@ -117,7 +136,13 @@ function createServer(): Server {
  * Точка входа
  */
 async function main(): Promise<void> {
-  console.error(`[${SERVER_NAME}] Starting v${SERVER_VERSION}...`);
+  const mode = getTransportMode();
+  console.error(`[${SERVER_NAME}] Starting v${SERVER_VERSION} in ${mode} mode...`);
+
+  // Загрузка API ключей (для HTTP режима)
+  if (mode === 'http') {
+    loadApiKeys();
+  }
 
   // 1. Подключение к MongoDB (обязательно)
   try {
@@ -150,12 +175,10 @@ async function main(): Promise<void> {
     await syncMongoToQdrant();
   } catch (error) {
     console.error('[Warning] Sync failed:', error);
-    // Не fatal — сервер может работать, но часть записей без векторов
   }
 
-  // 5. Создание и запуск MCP сервера
+  // 5. Создание MCP сервера
   const server = createServer();
-  const transport = new StdioServerTransport();
 
   // Graceful shutdown
   const shutdown = async () => {
@@ -168,8 +191,14 @@ async function main(): Promise<void> {
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
 
-  await server.connect(transport);
-  console.error(`[${SERVER_NAME}] Server running on stdio`);
+  // 6. Запуск транспорта
+  if (mode === 'http') {
+    startHttpServer(server);
+  } else {
+    const transport = new StdioServerTransport();
+    await server.connect(transport);
+    console.error(`[${SERVER_NAME}] Server running on stdio`);
+  }
 }
 
 main().catch((error) => {

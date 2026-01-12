@@ -1,3 +1,6 @@
+# Docker Compose для локального stdio режима
+# Использование: docker-compose -f docker-compose.stdio.yml up -d
+
 services:
   mongodb:
     image: mongo:7
@@ -39,14 +42,11 @@ services:
     environment:
       - MONGODB_URI=mongodb://mongodb:27017/recall_mcp
       - QDRANT_URL=http://qdrant:6333
-      - TRANSPORT=http
-      - PORT=3000
-      - API_KEYS_PATH=/app/config/api-keys.json
+      - TRANSPORT=stdio
     volumes:
       - model_cache:/app/.cache
-      - ./config:/app/config:ro
-    ports:
-      - "3000:3000"
+    stdin_open: true
+    tty: true
 
 volumes:
   mongo_data:
