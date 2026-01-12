@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { Knowledge } from '../models/knowledge.js';
 import { isDatabaseConnected } from '../config/database.js';
-import { generateEmbedding, isOllamaAvailable } from '../services/embeddings.js';
+import { generateEmbedding, isModelReady } from '../services/embeddings.js';
 import { searchVectors, isQdrantAvailable } from '../services/vectorStore.js';
 import type { KnowledgeSearchResult } from '../types/knowledge.js';
 
@@ -63,12 +63,12 @@ async function tryVectorSearch(
   limit: number = 5
 ): Promise<KnowledgeSearchResult[]> {
   // Проверка доступности сервисов
-  if (!(await isOllamaAvailable()) || !(await isQdrantAvailable())) {
+  if (!isModelReady() || !(await isQdrantAvailable())) {
     return [];
   }
 
   try {
-    const queryVector = await generateEmbedding(query);
+    const queryVector = await generateEmbedding(query, true); // isQuery = true
     
     // Построение фильтра для Qdrant
     const filter: Record<string, unknown> = {};
@@ -88,24 +88,26 @@ async function tryVectorSearch(
     const docs = await Knowledge.find({ _id: { $in: ids } }).lean().exec();
     const docMap = new Map(docs.map(d => [d._id.toString(), d]));
 
-    return results
-      .map(r => {
-        const doc = docMap.get(r.id);
-        if (!doc) return null;
+    const mapped: KnowledgeSearchResult[] = [];
+    
+    for (const r of results) {
+      const doc = docMap.get(r.id);
+      if (!doc) continue;
 
-        return {
-          id: r.id,
-          title: doc.title,
-          kind: doc.kind,
-          tags: doc.tags,
-          preview: doc.content.length > PREVIEW_LENGTH
-            ? doc.content.substring(0, PREVIEW_LENGTH) + '...'
-            : doc.content,
-          project: doc.project,
-          score: r.score,
-        };
-      })
-      .filter((r): r is KnowledgeSearchResult => r !== null);
+      mapped.push({
+        id: r.id,
+        title: doc.title,
+        kind: doc.kind,
+        tags: doc.tags,
+        preview: doc.content.length > PREVIEW_LENGTH
+          ? doc.content.substring(0, PREVIEW_LENGTH) + '...'
+          : doc.content,
+        project: doc.project,
+        score: r.score,
+      });
+    }
+
+    return mapped;
   } catch (error) {
     console.error('[Vector Search] Failed:', error);
     return [];

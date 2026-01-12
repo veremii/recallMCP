@@ -5,28 +5,26 @@ MCP-сервер для персистентного хранения инжен
 ## Архитектура
 
 ```
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│   Claude    │────▶│  MCP Server │────▶│   MongoDB   │  (метаданные)
-└─────────────┘     └──────┬──────┘     └─────────────┘
-                          │
-                          ▼
-                   ┌─────────────┐     ┌─────────────┐
-                   │   Ollama    │────▶│   Qdrant    │  (векторы)
-                   │ (embeddings)│     │ (quantized) │
-                   └─────────────┘     └─────────────┘
+┌─────────────┐     ┌───────────────────────────────┐
+│   Claude    │────▶│         MCP Server            │
+└─────────────┘     │  ┌─────────────────────────┐  │
+                    │  │  transformers.js        │  │──▶ Qdrant
+                    │  │  (multilingual-e5-small)│  │    (vectors)
+                    │  └─────────────────────────┘  │
+                    └───────────────┬───────────────┘
+                                    │
+                                    ▼
+                              ┌───────────┐
+                              │  MongoDB  │
+                              │  (data)   │
+                              └───────────┘
 ```
 
-**Всё в Docker — запуск в 1 клик.**
+**Всё в Docker — запуск в 1 клик. Без Ollama (~500MB вместо ~3GB).**
 
 ## Быстрый старт
 
-### 1. Запуск (один клик)
-
-```bash
-./scripts/start.sh
-```
-
-Или напрямую:
+### 1. Запуск
 
 ```bash
 docker-compose up -d
@@ -34,12 +32,11 @@ docker-compose up -d
 
 Автоматически поднимутся:
 
-- **MongoDB** — хранение метаданных
+- **MongoDB** — хранение данных
 - **Qdrant** — векторное хранилище (quantized)
-- **Ollama** — локальные эмбеддинги
-- **MCP Server** — сам сервер
+- **MCP Server** — сервер с встроенными эмбеддингами
 
-Модель `nomic-embed-text` скачается автоматически при первом запуске.
+Модель `multilingual-e5-small` (~90MB) скачается при первом запуске.
 
 ### 2. Настройка Claude Desktop
 
@@ -59,7 +56,7 @@ docker-compose up -d
 ### 3. Остановка
 
 ```bash
-./scripts/stop.sh
+docker-compose down
 ```
 
 ## Инструменты
@@ -83,11 +80,19 @@ docker-compose up -d
 
 ## Оптимизации
 
-| Техника                 | Описание                      | Эффект           |
-| ----------------------- | ----------------------------- | ---------------- |
-| **Scalar Quantization** | int8 вместо float32           | 4x меньше памяти |
-| **HNSW Index**          | Approximate nearest neighbors | O(log n) поиск   |
-| **Hybrid Search**       | Vector → Text fallback        | 100% coverage    |
+| Техника                 | Описание                       | Эффект           |
+| ----------------------- | ------------------------------ | ---------------- |
+| **Scalar Quantization** | int8 вместо float32            | 4x меньше памяти |
+| **ONNX Runtime**        | transformers.js с квантованием | ~90MB модель     |
+| **Hybrid Search**       | Vector → Text fallback         | 100% coverage    |
+
+## Модель эмбеддингов
+
+**multilingual-e5-small** — мультиязычная модель с хорошей поддержкой русского.
+
+- Размер: ~90MB (quantized)
+- Dimensions: 384
+- Качество на русском: ~58% MTEB
 
 ## Разработка (без Docker)
 
@@ -95,7 +100,7 @@ docker-compose up -d
 npm install
 
 # Поднять только БД
-docker-compose up -d mongodb qdrant ollama
+docker-compose up -d mongodb qdrant
 
 # Dev режим
 npm run dev
@@ -103,15 +108,13 @@ npm run dev
 
 ## Переменные окружения
 
-| Переменная        | По умолчанию                           | Описание               |
-| ----------------- | -------------------------------------- | ---------------------- |
-| `MONGODB_URI`     | `mongodb://localhost:27017/recall_mcp` | MongoDB                |
-| `QDRANT_URL`      | `http://localhost:6333`                | Qdrant vector DB       |
-| `OLLAMA_URL`      | `http://localhost:11434`               | Ollama API             |
-| `EMBEDDING_MODEL` | `nomic-embed-text`                     | Модель для эмбеддингов |
+| Переменная    | По умолчанию                           | Описание         |
+| ------------- | -------------------------------------- | ---------------- |
+| `MONGODB_URI` | `mongodb://localhost:27017/recall_mcp` | MongoDB          |
+| `QDRANT_URL`  | `http://localhost:6333`                | Qdrant vector DB |
 
 ## Требования
 
 - Docker & Docker Compose
-- ~4GB RAM (Ollama + модель)
-- ~2GB диска (модель + данные)
+- ~1GB RAM
+- ~500MB диска

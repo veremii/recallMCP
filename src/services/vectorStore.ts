@@ -3,11 +3,11 @@
  * Поддерживает scalar quantization для экономии памяти
  */
 
-import { QdrantClient } from '@qdrant/js-client-rest';
-import { VECTOR_SIZE } from './embeddings.js';
+import { QdrantClient } from "@qdrant/js-client-rest";
+import { VECTOR_SIZE } from "./embeddings.js";
 
-const QDRANT_URL = process.env.QDRANT_URL || 'http://localhost:6333';
-const COLLECTION_NAME = 'knowledge';
+const QDRANT_URL = process.env.QDRANT_URL || "http://localhost:6333";
+const COLLECTION_NAME = "knowledge";
 
 let client: QdrantClient | null = null;
 let isInitialized = false;
@@ -33,19 +33,21 @@ export async function initVectorStore(): Promise<void> {
   try {
     // Проверяем существование коллекции
     const collections = await qdrant.getCollections();
-    const exists = collections.collections.some(c => c.name === COLLECTION_NAME);
+    const exists = collections.collections.some(
+      (c) => c.name === COLLECTION_NAME
+    );
 
     if (!exists) {
       // Создаём коллекцию с scalar quantization
       await qdrant.createCollection(COLLECTION_NAME, {
         vectors: {
           size: VECTOR_SIZE,
-          distance: 'Cosine',
+          distance: "Cosine",
         },
         // Scalar quantization: int8 вместо float32 (4x меньше памяти)
         quantization_config: {
           scalar: {
-            type: 'int8',
+            type: "int8",
             quantile: 0.99,
             always_ram: true,
           },
@@ -56,14 +58,18 @@ export async function initVectorStore(): Promise<void> {
         },
       });
 
-      console.error('[Qdrant] Collection created with scalar quantization');
+      console.error("[Qdrant] Collection created with scalar quantization");
     }
 
     isInitialized = true;
-    console.error('[Qdrant] Connected to', QDRANT_URL);
+    console.error("[Qdrant] Connected to", QDRANT_URL);
   } catch (error) {
-    console.error('[Qdrant] Init failed:', error);
-    throw new Error(`Qdrant initialization failed: ${error instanceof Error ? error.message : 'Unknown'}`);
+    console.error("[Qdrant] Init failed:", error);
+    throw new Error(
+      `Qdrant initialization failed: ${
+        error instanceof Error ? error.message : "Unknown"
+      }`
+    );
   }
 }
 
@@ -96,17 +102,23 @@ export async function searchVectors(
   queryVector: number[],
   limit: number = 5,
   filter?: Record<string, unknown>
-): Promise<Array<{ id: string; score: number; payload: Record<string, unknown> }>> {
+): Promise<
+  Array<{ id: string; score: number; payload: Record<string, unknown> }>
+> {
   const qdrant = getClient();
 
   const results = await qdrant.search(COLLECTION_NAME, {
     vector: queryVector,
     limit,
     with_payload: true,
-    filter: filter ? { must: Object.entries(filter).map(([key, value]) => ({
-      key,
-      match: { value },
-    })) } : undefined,
+    filter: filter
+      ? {
+          must: Object.entries(filter).map(([key, value]) => ({
+            key,
+            match: { value },
+          })),
+        }
+      : undefined,
     // Используем quantized vectors для поиска (быстрее)
     params: {
       quantization: {
@@ -115,7 +127,7 @@ export async function searchVectors(
     },
   });
 
-  return results.map(r => ({
+  return results.map((r) => ({
     id: r.id as string,
     score: r.score,
     payload: r.payload as Record<string, unknown>,
@@ -127,7 +139,7 @@ export async function searchVectors(
  */
 export async function deleteVector(id: string): Promise<void> {
   const qdrant = getClient();
-  
+
   await qdrant.delete(COLLECTION_NAME, {
     wait: true,
     points: [id],

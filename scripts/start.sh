@@ -6,18 +6,15 @@ echo "🚀 Starting Recall MCP..."
 # Запуск всех сервисов
 docker-compose up -d
 
-# Ждём инициализации модели
-echo "⏳ Waiting for Ollama model to download..."
-docker-compose logs -f ollama-init 2>/dev/null || true
-
 echo ""
-echo "✅ Recall MCP is ready!"
+echo "✅ Recall MCP is starting!"
 echo ""
 echo "Services:"
-echo "  - MongoDB:    localhost:27017"
-echo "  - Qdrant:     localhost:6333"
-echo "  - Ollama:     localhost:11434"
-echo "  - MCP Server: recall-mcp (stdio)"
+echo "  - MongoDB: localhost:27017"
+echo "  - Qdrant:  localhost:6333"
+echo "  - MCP:     recall-mcp (stdio)"
+echo ""
+echo "First run will download the embedding model (~90MB)."
 echo ""
 echo "Add to Claude Desktop config:"
 echo '  "recall": {'

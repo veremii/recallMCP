@@ -2,8 +2,8 @@ import { z } from 'zod';
 import { Knowledge } from '../models/knowledge.js';
 import { CreateKnowledgeSchema } from '../types/knowledge.js';
 import { isDatabaseConnected } from '../config/database.js';
-import { generateKnowledgeEmbedding, isOllamaAvailable } from '../services/embeddings.js';
-import { upsertVector } from '../services/vectorStore.js';
+import { generateKnowledgeEmbedding, isModelReady } from '../services/embeddings.js';
+import { upsertVector, isQdrantAvailable } from '../services/vectorStore.js';
 
 /**
  * Zod schema для MCP tool input
@@ -48,9 +48,9 @@ export async function saveKnowledge(input: SaveKnowledgeInput): Promise<string> 
   await knowledge.save();
   const id = knowledge._id.toString();
 
-  // Векторизация и сохранение в Qdrant (если Ollama доступен)
+  // Векторизация и сохранение в Qdrant
   let vectorized = false;
-  if (await isOllamaAvailable()) {
+  if (isModelReady() && await isQdrantAvailable()) {
     try {
       const embedding = await generateKnowledgeEmbedding(
         data.title,

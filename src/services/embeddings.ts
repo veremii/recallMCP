@@ -1,77 +1,94 @@
 /**
- * Сервис генерации эмбеддингов через Ollama
- * Модель: nomic-embed-text (768 dimensions)
+ * Сервис генерации эмбеддингов через @xenova/transformers
+ * Модель: multilingual-e5-small (384 dimensions)
+ * Хорошая поддержка русского языка
  */
 
-const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434';
-const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL || 'nomic-embed-text';
-export const VECTOR_SIZE = 768; // nomic-embed-text dimension
+import { pipeline, type FeatureExtractionPipeline } from "@xenova/transformers";
 
-interface OllamaEmbeddingResponse {
-  embedding: number[];
-}
+const MODEL_NAME = "Xenova/multilingual-e5-small";
+export const VECTOR_SIZE = 384;
+
+let embeddingPipeline: FeatureExtractionPipeline | null = null;
+let isInitializing = false;
 
 /**
- * Генерирует эмбеддинг для текста через Ollama API
+ * Инициализация модели (lazy loading)
  */
-export async function generateEmbedding(text: string): Promise<number[]> {
-  // Обрезаем текст до разумного размера (8K токенов ~ 32K символов)
-  const truncatedText = text.slice(0, 32000);
+async function getEmbeddingPipeline(): Promise<FeatureExtractionPipeline> {
+  if (embeddingPipeline) {
+    return embeddingPipeline;
+  }
+
+  if (isInitializing) {
+    // Ждём пока модель загрузится
+    while (isInitializing) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    return embeddingPipeline!;
+  }
+
+  isInitializing = true;
+  console.error(`[Embeddings] Loading model ${MODEL_NAME}...`);
 
   try {
-    const response = await fetch(`${OLLAMA_URL}/api/embeddings`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: EMBEDDING_MODEL,
-        prompt: truncatedText,
-      }),
+    embeddingPipeline = await pipeline("feature-extraction", MODEL_NAME, {
+      quantized: true, // Используем квантованную версию (~90MB vs ~470MB)
     });
-
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Ollama API error: ${response.status} - ${error}`);
-    }
-
-    const data = (await response.json()) as OllamaEmbeddingResponse;
-    
-    if (!data.embedding || !Array.isArray(data.embedding)) {
-      throw new Error('Invalid embedding response from Ollama');
-    }
-
-    return data.embedding;
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('fetch failed')) {
-      throw new Error(`Ollama not available at ${OLLAMA_URL}. Run: ollama serve`);
-    }
-    throw error;
+    console.error("[Embeddings] Model loaded successfully");
+    return embeddingPipeline;
+  } finally {
+    isInitializing = false;
   }
 }
 
 /**
- * Генерирует эмбеддинг для KnowledgeItem (комбинация title + tags + content)
+ * Генерирует эмбеддинг для текста
+ * E5 модели требуют префикс "query: " или "passage: "
+ */
+export async function generateEmbedding(
+  text: string,
+  isQuery = true
+): Promise<number[]> {
+  const pipe = await getEmbeddingPipeline();
+
+  // E5 модели требуют специальный префикс
+  const prefixedText = isQuery ? `query: ${text}` : `passage: ${text}`;
+
+  // Обрезаем до 512 токенов (~2000 символов для безопасности)
+  const truncatedText = prefixedText.slice(0, 2000);
+
+  const output = await pipe(truncatedText, {
+    pooling: "mean",
+    normalize: true,
+  });
+
+  // Конвертируем в обычный массив
+  return Array.from(output.data as Float32Array);
+}
+
+/**
+ * Генерирует эмбеддинг для KnowledgeItem (как passage)
  */
 export async function generateKnowledgeEmbedding(
   title: string,
   tags: string[],
   content: string
 ): Promise<number[]> {
-  // Взвешенная комбинация: title важнее content
-  const text = `${title}\n\nTags: ${tags.join(', ')}\n\n${content}`;
-  return generateEmbedding(text);
+  const text = `${title}. ${tags.join(", ")}. ${content}`;
+  return generateEmbedding(text, false); // passage, не query
 }
 
 /**
- * Проверка доступности Ollama
+ * Предзагрузка модели при старте
  */
-export async function isOllamaAvailable(): Promise<boolean> {
-  try {
-    const response = await fetch(`${OLLAMA_URL}/api/tags`, {
-      method: 'GET',
-      signal: AbortSignal.timeout(3000),
-    });
-    return response.ok;
-  } catch {
-    return false;
-  }
+export async function preloadModel(): Promise<void> {
+  await getEmbeddingPipeline();
+}
+
+/**
+ * Проверка готовности модели
+ */
+export function isModelReady(): boolean {
+  return embeddingPipeline !== null;
 }

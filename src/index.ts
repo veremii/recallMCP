@@ -10,13 +10,13 @@ import {
 
 import { connectDatabase, disconnectDatabase } from './config/database.js';
 import { initVectorStore } from './services/vectorStore.js';
-import { isOllamaAvailable } from './services/embeddings.js';
+import { preloadModel } from './services/embeddings.js';
 import { saveKnowledge, SaveKnowledgeInputSchema } from './tools/saveKnowledge.js';
 import { searchKnowledge, SearchKnowledgeInputSchema } from './tools/searchKnowledge.js';
 import { getKnowledge, GetKnowledgeInputSchema } from './tools/getKnowledge.js';
 
 const SERVER_NAME = 'recall-mcp';
-const SERVER_VERSION = '1.1.0';
+const SERVER_VERSION = '1.2.0';
 
 /**
  * Создание и настройка MCP сервера
@@ -126,18 +126,18 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  // Инициализация Qdrant (не критично если недоступен)
+  // Инициализация Qdrant
   try {
     await initVectorStore();
   } catch (error) {
     console.error('[Warning] Qdrant not available, using text search only:', error);
   }
 
-  // Проверка Ollama
-  if (await isOllamaAvailable()) {
-    console.error('[Ollama] Available for embeddings');
-  } else {
-    console.error('[Warning] Ollama not available. Run: ollama serve && ollama pull nomic-embed-text');
+  // Предзагрузка embedding модели
+  try {
+    await preloadModel();
+  } catch (error) {
+    console.error('[Warning] Embedding model failed to load:', error);
   }
 
   // Создание и запуск MCP сервера
