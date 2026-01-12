@@ -5,30 +5,40 @@
 
 import { Knowledge } from '../models/knowledge.js';
 import { generateKnowledgeEmbedding } from './embeddings.js';
-import { upsertVector, searchVectors, isQdrantAvailable } from './vectorStore.js';
+import { upsertVector, isQdrantAvailable } from './vectorStore.js';
+
+const QDRANT_URL = process.env.QDRANT_URL || 'http://localhost:6333';
 
 /**
- * Получает ID всех записей в Qdrant
+ * Получает MongoDB ID всех записей в Qdrant (из payload.mongo_id)
  */
-async function getQdrantIds(): Promise<Set<string>> {
+async function getQdrantMongoIds(): Promise<Set<string>> {
   const ids = new Set<string>();
   
   try {
-    // Делаем dummy поиск чтобы получить все записи
-    // Qdrant не имеет "list all", поэтому используем scroll
     const response = await fetch(
-      `${process.env.QDRANT_URL || 'http://localhost:6333'}/collections/knowledge/points/scroll`,
+      `${QDRANT_URL}/collections/knowledge/points/scroll`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ limit: 10000, with_payload: false }),
+        body: JSON.stringify({ 
+          limit: 10000, 
+          with_payload: { include: ['mongo_id'] }
+        }),
       }
     );
     
     if (response.ok) {
-      const data = await response.json() as { result: { points: Array<{ id: string }> } };
+      const data = await response.json() as { 
+        result: { 
+          points: Array<{ payload?: { mongo_id?: string } }> 
+        } 
+      };
+      
       for (const point of data.result.points) {
-        ids.add(String(point.id));
+        if (point.payload?.mongo_id) {
+          ids.add(point.payload.mongo_id);
+        }
       }
     }
   } catch (error) {
@@ -50,9 +60,9 @@ export async function syncMongoToQdrant(): Promise<{ synced: number; failed: num
 
   console.error('[Sync] Starting MongoDB → Qdrant sync...');
   
-  // Получаем ID уже проиндексированных записей
-  const qdrantIds = await getQdrantIds();
-  console.error(`[Sync] Found ${qdrantIds.size} vectors in Qdrant`);
+  // Получаем MongoDB ID уже проиндексированных записей
+  const indexedIds = await getQdrantMongoIds();
+  console.error(`[Sync] Found ${indexedIds.size} vectors in Qdrant`);
   
   // Получаем все записи из MongoDB
   const allDocs = await Knowledge.find({}, { _id: 1, title: 1, tags: 1, content: 1, kind: 1, project: 1 })
@@ -62,7 +72,7 @@ export async function syncMongoToQdrant(): Promise<{ synced: number; failed: num
   console.error(`[Sync] Found ${allDocs.length} documents in MongoDB`);
   
   // Фильтруем те, которых нет в Qdrant
-  const toSync = allDocs.filter(doc => !qdrantIds.has(doc._id.toString()));
+  const toSync = allDocs.filter(doc => !indexedIds.has(doc._id.toString()));
   
   if (toSync.length === 0) {
     console.error('[Sync] All documents already indexed');

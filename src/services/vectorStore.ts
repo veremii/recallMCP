@@ -13,6 +13,29 @@ let client: QdrantClient | null = null;
 let isInitialized = false;
 
 /**
+ * Конвертирует MongoDB ObjectId (24 hex) в UUID формат для Qdrant
+ * ObjectId: 6964e2c9c9340d7d4ed77ac1
+ * UUID:     6964e2c9-c934-0d7d-4ed7-7ac100000000
+ */
+function mongoIdToUuid(mongoId: string): string {
+  // Дополняем до 32 символов (UUID без дефисов)
+  const padded = mongoId.padEnd(32, "0");
+  // Форматируем как UUID: 8-4-4-4-12
+  return `${padded.slice(0, 8)}-${padded.slice(8, 12)}-${padded.slice(
+    12,
+    16
+  )}-${padded.slice(16, 20)}-${padded.slice(20, 32)}`;
+}
+
+/**
+ * Конвертирует UUID обратно в MongoDB ObjectId
+ */
+function uuidToMongoId(uuid: string): string {
+  // Убираем дефисы и берём первые 24 символа
+  return uuid.replace(/-/g, "").slice(0, 24);
+}
+
+/**
  * Получение клиента Qdrant
  */
 function getClient(): QdrantClient {
@@ -75,6 +98,7 @@ export async function initVectorStore(): Promise<void> {
 
 /**
  * Сохранение вектора в Qdrant
+ * @param id - MongoDB ObjectId (24 hex chars)
  */
 export async function upsertVector(
   id: string,
@@ -82,14 +106,15 @@ export async function upsertVector(
   payload: Record<string, unknown>
 ): Promise<void> {
   const qdrant = getClient();
+  const uuid = mongoIdToUuid(id);
 
   await qdrant.upsert(COLLECTION_NAME, {
     wait: true,
     points: [
       {
-        id,
+        id: uuid,
         vector,
-        payload,
+        payload: { ...payload, mongo_id: id },
       },
     ],
   });
@@ -97,6 +122,7 @@ export async function upsertVector(
 
 /**
  * Поиск похожих векторов
+ * Возвращает MongoDB ObjectId в поле id
  */
 export async function searchVectors(
   queryVector: number[],
@@ -127,22 +153,31 @@ export async function searchVectors(
     },
   });
 
-  return results.map((r) => ({
-    id: r.id as string,
-    score: r.score,
-    payload: r.payload as Record<string, unknown>,
-  }));
+  return results.map((r) => {
+    const payload = r.payload as Record<string, unknown>;
+    // Возвращаем mongo_id если есть, иначе конвертируем UUID
+    const mongoId =
+      (payload.mongo_id as string) || uuidToMongoId(r.id as string);
+
+    return {
+      id: mongoId,
+      score: r.score,
+      payload,
+    };
+  });
 }
 
 /**
  * Удаление вектора
+ * @param id - MongoDB ObjectId
  */
 export async function deleteVector(id: string): Promise<void> {
   const qdrant = getClient();
+  const uuid = mongoIdToUuid(id);
 
   await qdrant.delete(COLLECTION_NAME, {
     wait: true,
-    points: [id],
+    points: [uuid],
   });
 }
 
