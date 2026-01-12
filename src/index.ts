@@ -11,12 +11,13 @@ import {
 import { connectDatabase, disconnectDatabase } from './config/database.js';
 import { initVectorStore } from './services/vectorStore.js';
 import { preloadModel } from './services/embeddings.js';
+import { syncMongoToQdrant } from './services/sync.js';
 import { saveKnowledge, SaveKnowledgeInputSchema } from './tools/saveKnowledge.js';
 import { searchKnowledge, SearchKnowledgeInputSchema } from './tools/searchKnowledge.js';
 import { getKnowledge, GetKnowledgeInputSchema } from './tools/getKnowledge.js';
 
 const SERVER_NAME = 'recall-mcp';
-const SERVER_VERSION = '1.2.0';
+const SERVER_VERSION = '1.3.0';
 
 /**
  * Создание и настройка MCP сервера
@@ -118,7 +119,7 @@ function createServer(): Server {
 async function main(): Promise<void> {
   console.error(`[${SERVER_NAME}] Starting v${SERVER_VERSION}...`);
 
-  // Подключение к MongoDB
+  // 1. Подключение к MongoDB (обязательно)
   try {
     await connectDatabase();
   } catch (error) {
@@ -126,21 +127,33 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  // Инициализация Qdrant
+  // 2. Инициализация Qdrant (обязательно для векторного поиска)
   try {
     await initVectorStore();
   } catch (error) {
-    console.error('[Warning] Qdrant not available, using text search only:', error);
+    console.error('[Fatal] Cannot start without Qdrant:', error);
+    process.exit(1);
   }
 
-  // Предзагрузка embedding модели
+  // 3. Загрузка embedding модели (обязательно, блокирующая)
   try {
+    console.error('[Startup] Loading embedding model (this may take a minute)...');
     await preloadModel();
+    console.error('[Startup] Embedding model ready');
   } catch (error) {
-    console.error('[Warning] Embedding model failed to load:', error);
+    console.error('[Fatal] Cannot start without embedding model:', error);
+    process.exit(1);
   }
 
-  // Создание и запуск MCP сервера
+  // 4. Синхронизация MongoDB → Qdrant (индексируем записи без векторов)
+  try {
+    await syncMongoToQdrant();
+  } catch (error) {
+    console.error('[Warning] Sync failed:', error);
+    // Не fatal — сервер может работать, но часть записей без векторов
+  }
+
+  // 5. Создание и запуск MCP сервера
   const server = createServer();
   const transport = new StdioServerTransport();
 
